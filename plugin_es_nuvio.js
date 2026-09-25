@@ -1740,12 +1740,15 @@ function extractLinksFromPage(domain, pageUrl, seasonNum, episodeNum, cb) {
       seasonNum + '\\s*(?:&#215;|×|x)\\s*0?' + episodeNum + '[\\s\\S]{0,8000}?(?=<br\\s*/?>|</div>)',
       'S0?' + seasonNum + 'E' + ep2 + '[\\s\\S]{0,8000}?(?=<br\\s*/?>|</div>)'
     ];
-    var block = null;
+    var matchedBlocks = [];
     for (var pi = 0; pi < patterns.length; pi++) {
-      var m = html.match(new RegExp(patterns[pi], 'i'));
-      if (m) { block = m[0]; break; }
+      var re = new RegExp(patterns[pi], 'gi');
+      var pm;
+      while ((pm = re.exec(html)) !== null) {
+        matchedBlocks.push(pm[0]);
+      }
     }
-    if (!block) block = html;
+    var block = matchedBlocks.length > 0 ? matchedBlocks.join('\n') : html;
 
     // Extract clicka.cc URLs from the matched region
     var clickaTasks = [];
