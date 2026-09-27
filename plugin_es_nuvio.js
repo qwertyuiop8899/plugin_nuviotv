@@ -92,14 +92,6 @@ function _getUrlPath(url) {
 var ES_UA = 'Mozilla/5.0 (Linux; Android 13; Android TV) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
 function _customFetch(url, options) {
-  var targetUrl = url;
-  var lower = String(url || '').toLowerCase();
-  var isEurostreaming = lower.indexOf('eurostreaming') >= 0;
-
-  if (isEurostreaming && lower.indexOf('workers.dev') < 0) {
-    targetUrl = 'https://vidclick.leanhhu061208-775.workers.dev/?url=' + encodeURIComponent(url);
-  }
-
   var opts = options ? Object.assign({}, options) : {};
   delete opts.timeout;
 
@@ -108,7 +100,7 @@ function _customFetch(url, options) {
     return Promise.reject(new Error('fetch is not defined in runtime'));
   }
 
-  return fetchFn(targetUrl, opts);
+  return fetchFn(url, opts);
 }
 var MD_HOSTS = [
   'mixdrop.vip', 'mixdrop.ps', 'mixdrop.ch', 'mixdrop.to', 'mixdrop.club',
