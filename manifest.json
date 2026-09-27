@@ -1,12 +1,12 @@
 {
   "id": "nuviotv-plugins",
   "name": "Nuvio Plugins IT",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "scrapers": [
     {
       "id": "nuvio-cb01",
       "name": "CB01",
-      "version": "1.2.0",
+      "version": "1.3.0",
       "description": "Film e Serie TV da CB01 (MixDrop HD/SD)",
       "resources": ["stream"],
       "contentLanguage": ["it"],
@@ -19,7 +19,7 @@
     {
       "id": "nuvio-eurostreaming",
       "name": "Eurostreaming",
-      "version": "1.2.0",
+      "version": "1.3.0",
       "description": "Serie TV da Eurostreaming (MixDrop, Turbovid, DeltaBit)",
       "resources": ["stream"],
       "contentLanguage": ["it"],

@@ -1789,36 +1789,41 @@ function extractLinksFromPage(domain, pageUrl, seasonNum, episodeNum, cb) {
 }
 
 function parseMp4FromUint8Array(u8) {
-  var view = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
   var len = u8.length;
   var pos = 0;
   var w = 0, h = 0;
 
+  function getU32(off) {
+    if (off + 4 > len) return 0;
+    return ((u8[off] << 24) >>> 0) + (u8[off + 1] << 16) + (u8[off + 2] << 8) + u8[off + 3];
+  }
+
   function readTag(offset) {
+    if (offset + 4 > len) return "";
     return String.fromCharCode(u8[offset], u8[offset + 1], u8[offset + 2], u8[offset + 3]);
   }
 
   while (pos < len - 8) {
-    var size = view.getUint32(pos, false);
+    var size = getU32(pos);
     var tag = readTag(pos + 4);
-    if (tag === 'moov') {
+    if (tag === "moov") {
       var subpos = pos + 8;
       var moovEnd = Math.min(len, pos + size);
       while (subpos < moovEnd - 8) {
-        var ssize = view.getUint32(subpos, false);
+        var ssize = getU32(subpos);
         var stag = readTag(subpos + 4);
-        if (stag === 'trak') {
+        if (stag === "trak") {
           var trakpos = subpos + 8;
           var trakEnd = Math.min(len, subpos + ssize);
           while (trakpos < trakEnd - 8) {
-            var tsize = view.getUint32(trakpos, false);
+            var tsize = getU32(trakpos);
             var ttag = readTag(trakpos + 4);
-            if (ttag === 'tkhd') {
+            if (ttag === "tkhd") {
               var ver = u8[trakpos + 8];
               var off = (ver === 1) ? 88 : 76;
               if (trakpos + 8 + off + 8 <= len) {
-                var wRaw = view.getUint32(trakpos + 8 + off, false);
-                var hRaw = view.getUint32(trakpos + 8 + off + 4, false);
+                var wRaw = getU32(trakpos + 8 + off);
+                var hRaw = getU32(trakpos + 8 + off + 4);
                 var tw = wRaw >> 16;
                 var th = hRaw >> 16;
                 if (tw > 0 && th > 0) {
@@ -1842,36 +1847,33 @@ function parseMp4FromUint8Array(u8) {
 function probeResolution(streamUrl, headers) {
   return new Promise(function (resolve) {
     if (!streamUrl) return resolve(null);
-    var reqHeaders = Object.assign({}, headers || {}, {
-      'Range': 'bytes=0-131071'
-    });
-    var controller = (typeof AbortController !== 'undefined') ? new AbortController() : null;
-    var timer = setTimeout(function () {
-      if (controller) { try { controller.abort(); } catch (e) { } }
-      resolve(null);
-    }, 2500);
-
-    var fetchFn = (typeof fetch !== 'undefined') ? fetch : (typeof globalThis !== 'undefined' ? globalThis.fetch : null);
-    if (!fetchFn) return resolve(null);
-
-    fetchFn(streamUrl, {
-      headers: reqHeaders,
-      signal: controller ? controller.signal : undefined
-    })
-      .then(function (res) {
-        if (!res.ok && res.status !== 206) throw new Error('status ' + res.status);
-        return res.arrayBuffer();
-      })
-      .then(function (ab) {
-        clearTimeout(timer);
-        var u8 = new Uint8Array(ab);
-        var dims = parseMp4FromUint8Array(u8);
-        resolve(dims);
-      })
-      .catch(function () {
-        clearTimeout(timer);
-        resolve(null);
+    try {
+      var reqHeaders = Object.assign({}, headers || {}, {
+        "Range": "bytes=0-131071"
       });
+      var fetchFn = (typeof fetch !== "undefined") ? fetch : (typeof globalThis !== "undefined" ? globalThis.fetch : null);
+      if (!fetchFn) return resolve(null);
+
+      fetchFn(streamUrl, { headers: reqHeaders })
+        .then(function (res) {
+          if (!res.ok && res.status !== 206) return null;
+          if (typeof res.arrayBuffer === "function") {
+            return res.arrayBuffer();
+          }
+          return null;
+        })
+        .then(function (ab) {
+          if (!ab) return resolve(null);
+          var u8 = new Uint8Array(ab);
+          var dims = parseMp4FromUint8Array(u8);
+          resolve(dims);
+        })
+        .catch(function () {
+          resolve(null);
+        });
+    } catch (e) {
+      resolve(null);
+    }
   });
 }
 
@@ -1883,26 +1885,26 @@ function probeStreamsResolution(streams, cb) {
       .then(function (dims) {
         if (dims) {
           if (dims.width >= 1800 || dims.height >= 900) {
-            s.quality = '1080p';
+            s.quality = "1080p";
           } else if (dims.width >= 1200 || dims.height >= 600) {
-            s.quality = '720p';
+            s.quality = "720p";
           } else {
-            s.quality = '480p';
+            s.quality = "480p";
           }
           if (s.title) {
-            s.title = s.title.replace(/\s+(?:1080p|720p|480p|HD)\b/gi, '').trim();
-            if (s.title.indexOf('(Clicka)') >= 0) {
-              s.title = s.title.replace('(Clicka)', s.quality + ' (Clicka)');
+            s.title = s.title.replace(/\s+(?:1080p|720p|480p|HD)\b/gi, "").trim();
+            if (s.title.indexOf("(Clicka)") >= 0) {
+              s.title = s.title.replace("(Clicka)", s.quality + " (Clicka)");
             } else {
-              s.title = s.title + ' ' + s.quality;
+              s.title = s.title + " " + s.quality;
             }
           }
           if (s.name) {
-            s.name = s.name.replace(/\s+(?:1080p|720p|480p|HD)\b/gi, '').trim();
-            if (s.name.indexOf('(Clicka)') >= 0) {
-              s.name = s.name.replace('(Clicka)', s.quality + ' (Clicka)');
+            s.name = s.name.replace(/\s+(?:1080p|720p|480p|HD)\b/gi, "").trim();
+            if (s.name.indexOf("(Clicka)") >= 0) {
+              s.name = s.name.replace("(Clicka)", s.quality + " (Clicka)");
             } else {
-              s.name = s.name + ' ' + s.quality;
+              s.name = s.name + " " + s.quality;
             }
           }
         }
