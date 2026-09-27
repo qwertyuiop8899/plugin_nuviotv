@@ -398,8 +398,8 @@ function findEpisodeBlock(html, season, episode) {
   var s2 = pad2(season);
 
   var epLabels = [
-    '(?:' + s + '|' + s2 + ')\\s*(?:x|×|&#215;)\\s*0?' + episode + '(?!\\d)',
-    'S0?' + s + 'E' + ep2,
+    '(?<!\\d)(?:' + s + '|' + s2 + ')\\s*(?:x|×|&#215;)\\s*0?' + episode + '(?!\\d)',
+    '(?<!\\d)S0?' + s + 'E' + ep2 + '(?!\\d)',
     'STAGIONE\\s+' + season + '\\s*-\\s*EPISODIO\\s+' + episode + '\\b'
   ];
 

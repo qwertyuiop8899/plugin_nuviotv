@@ -1729,8 +1729,8 @@ function extractLinksFromPage(domain, pageUrl, seasonNum, episodeNum, cb) {
     // Match episode line: "1×01" / "1&#215;01" / "S01E01" (like Python es.py)
     var ep2 = episodeNum < 10 ? '0' + String(episodeNum) : String(episodeNum);
     var patterns = [
-      seasonNum + '\\s*(?:&#215;|×|x)\\s*0?' + episodeNum + '[\\s\\S]{0,8000}?(?=<br\\s*/?>|</div>)',
-      'S0?' + seasonNum + 'E' + ep2 + '[\\s\\S]{0,8000}?(?=<br\\s*/?>|</div>)'
+      '(?<!\\d)(?:0?' + seasonNum + ')\\s*(?:&#215;|×|x|X|-)\\s*(?:0?' + episodeNum + ')(?!\\d)[\\s\\S]{0,1500}?(?=<br\\s*/?>|</div>|</p>|\\n|$)',
+      '(?<!\\d)S0?' + seasonNum + 'E' + ep2 + '(?!\\d)[\\s\\S]{0,1500}?(?=<br\\s*/?>|</div>|</p>|\\n|$)'
     ];
     var matchedBlocks = [];
     for (var pi = 0; pi < patterns.length; pi++) {
@@ -1740,7 +1740,8 @@ function extractLinksFromPage(domain, pageUrl, seasonNum, episodeNum, cb) {
         matchedBlocks.push(pm[0]);
       }
     }
-    var block = matchedBlocks.length > 0 ? matchedBlocks.join('\n') : html;
+    if (matchedBlocks.length === 0) return cb(null);
+    var block = matchedBlocks.join('\n');
 
     // Extract clicka.cc URLs from the matched region
     var clickaTasks = [];
