@@ -1782,7 +1782,34 @@ function searchSeries(domain, title, seasonNum, cb) {
 }
 
 // =========================================================================
-// extractLinksFromPage - Python es.py approach (regex entire HTML)
+// detectEpisodeLanguage - Determines if a matched episode block is ITA or SUB ITA
+// =========================================================================
+function detectEpisodeLanguage(html, matchIdx, matchText) {
+  var upperMatch = matchText.toUpperCase();
+  if (/\b(?:SUB[-_ ]?ITA|SUBBED|\(SUB\))\b/i.test(upperMatch)) {
+    return 'SUB ITA';
+  }
+
+  var precedingText = html.substring(Math.max(0, matchIdx - 4000), matchIdx);
+  var headerRe = /<(?:div[^>]*class=["']su-spoiler-title[^"']*["']|h[1-6]|strong|b)[^>]*>([\s\S]*?)<\/(?:div|h[1-6]|strong|b)>/gi;
+  var hm;
+  var lastMatchedLang = null;
+  while ((hm = headerRe.exec(precedingText)) !== null) {
+    var headerText = hm[1].replace(/<[^>]+>/g, '').trim().toUpperCase();
+    if (headerText.indexOf('STAGIONE') >= 0 || headerText.indexOf('SUB') >= 0 || headerText.indexOf('ITA') >= 0) {
+      if (headerText.indexOf('SUB') >= 0) {
+        lastMatchedLang = 'SUB ITA';
+      } else if (headerText.indexOf('ITA') >= 0) {
+        lastMatchedLang = 'ITA';
+      }
+    }
+  }
+
+  return lastMatchedLang || 'ITA';
+}
+
+// =========================================================================
+// extractLinksFromPage - Python es.py approach with Language Detection
 // =========================================================================
 function extractLinksFromPage(domain, pageUrl, seasonNum, episodeNum, cb) {
   esFetch(pageUrl, function (err, html) {
@@ -1790,32 +1817,34 @@ function extractLinksFromPage(domain, pageUrl, seasonNum, episodeNum, cb) {
     var streams = [];
     var seen = {};
 
-    // Match episode line: "1×01" / "1&#215;01" / "S01E01" (like Python es.py)
+    // Match episode line: "1×01" / "1&#215;01" / "S01E01"
     var ep2 = episodeNum < 10 ? '0' + String(episodeNum) : String(episodeNum);
     var patterns = [
-      '(?<!\\d)(?:0?' + seasonNum + ')\\s*(?:&#215;|×|x|X|-)\\s*(?:0?' + episodeNum + ')(?!\\d)[\\s\\S]{0,1500}?(?=<br\\s*/?>|</div>|</p>|\\n|$)',
+      '(?<!\\d)(?:0?' + seasonNum + ')\\s*(?:&#215;|×|x|X)\\s*(?:0?' + episodeNum + ')(?!\\d)[\\s\\S]{0,1500}?(?=<br\\s*/?>|</div>|</p>|\\n|$)',
       '(?<!\\d)S0?' + seasonNum + 'E' + ep2 + '(?!\\d)[\\s\\S]{0,1500}?(?=<br\\s*/?>|</div>|</p>|\\n|$)'
     ];
-    var matchedBlocks = [];
+
+    var clickaTasks = [];
+    var clickaRe = /https?:\/\/clicka\.cc\/(?:a?(tv|mix|delta))\/[A-Za-z0-9]+/gi;
+
     for (var pi = 0; pi < patterns.length; pi++) {
       var re = new RegExp(patterns[pi], 'gi');
       var pm;
       while ((pm = re.exec(html)) !== null) {
-        matchedBlocks.push(pm[0]);
+        var matchText = pm[0];
+        var lang = detectEpisodeLanguage(html, pm.index, matchText);
+        var cm;
+        while ((cm = clickaRe.exec(matchText)) !== null) {
+          var linkUrl = cm[0];
+          if (!seen[linkUrl]) {
+            seen[linkUrl] = true;
+            clickaTasks.push({ url: linkUrl, kind: cm[1], lang: lang });
+          }
+        }
       }
     }
-    if (matchedBlocks.length === 0) return cb(null);
-    var block = matchedBlocks.join('\n');
 
-    // Extract clicka.cc URLs from the matched region
-    var clickaTasks = [];
-    var clickaRe = /https?:\/\/clicka\.cc\/(?:a?(tv|mix|delta))\/[A-Za-z0-9]+/gi;
-    var cm;
-    while ((cm = clickaRe.exec(block)) !== null) {
-      if (!seen[cm[0]]) { seen[cm[0]] = true; clickaTasks.push({ url: cm[0], kind: cm[1] }); }
-    }
-
-    if (clickaTasks.length === 0) return cb(streams.length > 0 ? streams : null);
+    if (clickaTasks.length === 0) return cb(null);
 
     // Resolve clicka.cc URLs in parallel
     var resolved = false;
@@ -1827,6 +1856,7 @@ function extractLinksFromPage(domain, pageUrl, seasonNum, episodeNum, cb) {
         .then(function (streamObj) {
           if (streamObj && streamObj.url && !seen[streamObj.url]) {
             seen[streamObj.url] = true;
+            streamObj.lang = task.lang || 'ITA';
             streams.push(streamObj);
           }
         })
@@ -1938,6 +1968,28 @@ function probeStreamsResolution(streams, cb) {
   if (!streams || streams.length === 0) return cb([]);
   var pending = streams.length;
   streams.forEach(function (s) {
+    function applyLabels() {
+      var langTag = s.lang ? (" [" + s.lang + "]") : "";
+      if (s.title) {
+        s.title = s.title.replace(/\s+(?:1080p|720p|480p|HD)\b/gi, "").trim();
+        s.title = s.title.replace(/\s*\[(?:ITA|SUB ITA)\]/gi, "").trim();
+        if (s.title.indexOf("(Clicka)") >= 0) {
+          s.title = s.title.replace("(Clicka)", (s.quality || "720p") + langTag + " (Clicka)");
+        } else {
+          s.title = s.title + " " + (s.quality || "720p") + langTag;
+        }
+      }
+      if (s.name) {
+        s.name = s.name.replace(/\s+(?:1080p|720p|480p|HD)\b/gi, "").trim();
+        s.name = s.name.replace(/\s*\[(?:ITA|SUB ITA)\]/gi, "").trim();
+        if (s.name.indexOf("(Clicka)") >= 0) {
+          s.name = s.name.replace("(Clicka)", (s.quality || "720p") + langTag + " (Clicka)");
+        } else {
+          s.name = s.name + " " + (s.quality || "720p") + langTag;
+        }
+      }
+    }
+
     probeResolution(s.url, s.headers)
       .then(function (dims) {
         if (dims) {
@@ -1948,28 +2000,23 @@ function probeStreamsResolution(streams, cb) {
           } else {
             s.quality = "480p";
           }
-          if (s.title) {
-            s.title = s.title.replace(/\s+(?:1080p|720p|480p|HD)\b/gi, "").trim();
-            if (s.title.indexOf("(Clicka)") >= 0) {
-              s.title = s.title.replace("(Clicka)", s.quality + " (Clicka)");
-            } else {
-              s.title = s.title + " " + s.quality;
-            }
-          }
-          if (s.name) {
-            s.name = s.name.replace(/\s+(?:1080p|720p|480p|HD)\b/gi, "").trim();
-            if (s.name.indexOf("(Clicka)") >= 0) {
-              s.name = s.name.replace("(Clicka)", s.quality + " (Clicka)");
-            } else {
-              s.name = s.name + " " + s.quality;
-            }
-          }
         }
+        applyLabels();
       })
-      .catch(function () { })
+      .catch(function () {
+        applyLabels();
+      })
       .then(function () {
         pending--;
-        if (pending === 0) cb(streams);
+        if (pending === 0) {
+          // Sort: ITA streams first, SUB ITA streams second
+          streams.sort(function (a, b) {
+            var aSub = (a.lang === "SUB ITA" || /SUB/i.test(a.title || "")) ? 1 : 0;
+            var bSub = (b.lang === "SUB ITA" || /SUB/i.test(b.title || "")) ? 1 : 0;
+            return aSub - bSub;
+          });
+          cb(streams);
+        }
       });
   });
 }
