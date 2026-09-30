@@ -2009,11 +2009,26 @@ function probeStreamsResolution(streams, cb) {
       .then(function () {
         pending--;
         if (pending === 0) {
-          // Sort: ITA streams first, SUB ITA streams second
+          // Sort: 1) ITA streams first, SUB ITA streams second; 2) Highest resolution first
           streams.sort(function (a, b) {
             var aSub = (a.lang === "SUB ITA" || /SUB/i.test(a.title || "")) ? 1 : 0;
             var bSub = (b.lang === "SUB ITA" || /SUB/i.test(b.title || "")) ? 1 : 0;
-            return aSub - bSub;
+            if (aSub !== bSub) return aSub - bSub;
+            function qRank(q) {
+              if (!q) return 0;
+              var s = String(q).toLowerCase();
+              if (s.indexOf('2160') >= 0 || s.indexOf('4k') >= 0) return 2160;
+              if (s.indexOf('1440') >= 0) return 1440;
+              if (s.indexOf('1080') >= 0) return 1080;
+              if (s.indexOf('720') >= 0) return 720;
+              if (s.indexOf('480') >= 0) return 480;
+              if (s.indexOf('360') >= 0) return 360;
+              return 0;
+            }
+            var aQ = qRank(a.quality);
+            var bQ = qRank(b.quality);
+            if (aQ !== bQ) return bQ - aQ;
+            return 0;
           });
           cb(streams);
         }

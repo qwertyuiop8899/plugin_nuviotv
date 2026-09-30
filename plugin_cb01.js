@@ -643,7 +643,23 @@ function probeStreamsResolution(streams, cb) {
       .catch(function () { })
       .then(function () {
         pending--;
-        if (pending === 0) cb(streams);
+        if (pending === 0) {
+          function qRank(q) {
+            if (!q) return 0;
+            var s = String(q).toLowerCase();
+            if (s.indexOf('2160') >= 0 || s.indexOf('4k') >= 0) return 2160;
+            if (s.indexOf('1440') >= 0) return 1440;
+            if (s.indexOf('1080') >= 0) return 1080;
+            if (s.indexOf('720') >= 0) return 720;
+            if (s.indexOf('480') >= 0) return 480;
+            if (s.indexOf('360') >= 0) return 360;
+            return 0;
+          }
+          streams.sort(function (a, b) {
+            return qRank(b.quality) - qRank(a.quality);
+          });
+          cb(streams);
+        }
       });
   });
 }
